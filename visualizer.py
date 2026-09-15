@@ -6,6 +6,8 @@ from tkinter import filedialog, messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from hardwareService import get_cpu_display_name
+
 DB_LABELS = {'sqlite':'SQLite','litedb':'LiteDB'}
 DBS = ['sqlite','litedb']
 OPS = ['insert','select','update','transaction','delete']
@@ -15,12 +17,9 @@ METRICS = {
 }
 CATEGORIES = {'lowend':'Low-End','midrange':'Mid-Range','highend':'High-End','unknown':'Unbekannt'}
 
-# Explicit mapping: Windows identification string -> real CPU model.
-# Add only CPUs you have verified from the participating machines.
-CPU_NAME_MAP = {
-    # 'AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD': 'AMD Ryzen 7 7800X3D',
-    # 'Intel64 Family 6 Model 183 Stepping 1, GenuineIntel': 'Intel Core ...',
-}
+# CPU identification is handled centrally by hardwareService.py.
+# The Windows processor string alone is not unique enough; the service uses
+# processor + cores + threads + observed maximum frequency.
 # Optional manually verified category overrides.
 CUSTOM_CPU_CATEGORY_MAP = {}
 
@@ -47,8 +46,7 @@ def category(hw):
 
 
 def cpu_name(hw):
-    raw=str(hw.get('cpu',{}).get('processor',''))
-    return CPU_NAME_MAP.get(raw, raw or 'Unbekannte CPU')
+    return get_cpu_display_name(hw)
 
 
 def test_code(data):
