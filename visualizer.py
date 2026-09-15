@@ -1,48 +1,88 @@
-#!/usr/bin/env python3
 from __future__ import annotations
-import argparse, json, math, tkinter as tk
+
+import argparse
+import json
+import math
+import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from hardwareService import get_cpu_display_name
 
-DB_LABELS = {'sqlite':'SQLite','litedb':'LiteDB'}
-DBS = ['sqlite','litedb']
-OPS = ['insert','select','update','transaction','delete']
-METRICS = {
-    'exec_time':'Ausführungszeit','tps':'TPS','queryrate':'Query Rate',
-    'latency_avg':'Latenz Ø','latency_min':'Latenz min','latency_max':'Latenz max'
-}
-CATEGORIES = {'lowend':'Low-End','midrange':'Mid-Range','highend':'High-End','unknown':'Unbekannt'}
 
-# CPU identification is handled centrally by hardwareService.py.
-# The Windows processor string alone is not unique enough; the service uses
-# processor + cores + threads + observed maximum frequency.
-# Optional manually verified category overrides.
+DB_LABELS = {
+    "sqlite": "SQLite",
+    "litedb": "LiteDB",
+}
+
+DBS = ["sqlite", "litedb"]
+
+OPS = [
+    "insert",
+    "select",
+    "update",
+    "transaction",
+    "delete",
+]
+
+METRICS = {
+    "exec_time": "Ausführungszeit",
+    "tps": "TPS",
+    "queryrate": "Query Rate",
+    "latency_avg": "Latenz Ø",
+    "latency_min": "Latenz min",
+    "latency_max": "Latenz max",
+}
+
+CATEGORIES = {
+    "lowend": "Low-End",
+    "midrange": "Mid-Range",
+    "highend": "High-End",
+    "unknown": "Unbekannt",
+}
+
+
 CUSTOM_CPU_CATEGORY_MAP = {}
 
 
-def num(v, default=math.nan):
-    try: return float(v)
-    except (TypeError, ValueError): return default
+def num(value, default=math.nan):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def score_hardware(hw):
-    c=hw.get('cpu',{}); r=hw.get('ram',{})
-    return (num(c.get('cores'),0)*30 + num(c.get('threads'),0)*15 +
-            num((c.get('frequency_mhz') or {}).get('max'),0)/100*5 +
-            num(r.get('size_gb'),0)*2 + num(r.get('frequency_mhz'),0)/1000*10)
+    cpu = hw.get("cpu", {})
+    ram = hw.get("ram", {})
+
+    return (
+        num(cpu.get("cores"), 0) * 30
+        + num(cpu.get("threads"), 0) * 15
+        + num((cpu.get("frequency_mhz") or {}).get("max"), 0) / 100 * 5
+        + num(ram.get("size_gb"), 0) * 2
+        + num(ram.get("frequency_mhz"), 0) / 1000 * 10
+    )
 
 
 def category(hw):
-    raw=hw.get('cpu',{}).get('processor','')
-    if raw in CUSTOM_CPU_CATEGORY_MAP: return CUSTOM_CPU_CATEGORY_MAP[raw]
-    s=score_hardware(hw)
-    if s <= 349: return 'lowend'
-    if s <= 649: return 'midrange'
-    return 'highend'
+    raw = hw.get("cpu", {}).get("processor", "")
+
+    if raw in CUSTOM_CPU_CATEGORY_MAP:
+        return CUSTOM_CPU_CATEGORY_MAP[raw]
+
+    score = score_hardware(hw)
+
+    if score <= 349:
+        return "lowend"
+
+    if score <= 649:
+        return "midrange"
+
+    return "highend"
 
 
 def cpu_name(hw):
@@ -50,132 +90,880 @@ def cpu_name(hw):
 
 
 def test_code(data):
-    keys=['test_code','testCode','test_id','testId','testkürzel','testkuerzel','code']
-    for k in keys:
-        if data.get(k) not in (None,''): return str(data[k])
-    meta=data.get('metadata',{})
-    if isinstance(meta,dict):
-        for k in keys:
-            if meta.get(k) not in (None,''): return str(meta[k])
-    return ''
+    keys = [
+        "test_code",
+        "testCode",
+        "test_id",
+        "testId",
+        "testkürzel",
+        "testkuerzel",
+        "code",
+    ]
+
+    for key in keys:
+        if data.get(key) not in (None, ""):
+            return str(data[key])
+
+    metadata = data.get("metadata", {})
+
+    if isinstance(metadata, dict):
+        for key in keys:
+            if metadata.get(key) not in (None, ""):
+                return str(metadata[key])
+
+    return ""
 
 
 def load(path):
-    path=Path(path)
-    with path.open(encoding='utf-8') as f: d=json.load(f)
-    if not isinstance(d.get('results'),list): raise ValueError("'results' muss eine Liste sein")
-    return {'path':path,'hardware':d.get('hardware',{}),'results':d['results'],
-            'category':category(d.get('hardware',{})),'test_code':test_code(d)}
+    path = Path(path)
+
+    with path.open(encoding="utf-8") as file:
+        data = json.load(file)
+
+    if not isinstance(data.get("results"), list):
+        raise ValueError("'results' muss eine Liste sein")
+
+    return {
+        "path": path,
+        "hardware": data.get("hardware", {}),
+        "results": data["results"],
+        "category": category(data.get("hardware", {})),
+        "test_code": test_code(data),
+    }
 
 
-def iteration(ds,n):
-    for r in ds['results']:
+def expand_input_paths(paths):
+    """
+    Erweitert Dateiangaben für CLI-Aufrufe.
+
+    Unterstützt unter Windows z. B.:
+
+        python visualizer.py results\\*.json
+
+    sowie:
+
+        python visualizer.py results
+
+    und normale einzelne Dateien.
+    """
+
+    result = []
+
+    for raw_path in paths:
+        path = Path(raw_path)
+
+        # Existierender Ordner:
+        # Alle JSON-Dateien aus diesem Ordner laden.
+        if path.is_dir():
+            result.extend(
+                sorted(
+                    p for p in path.iterdir()
+                    if p.is_file() and p.suffix.lower() == ".json"
+                )
+            )
+            continue
+
+        # Existierende normale Datei.
+        if path.is_file():
+            result.append(path)
+            continue
+
+        # Wildcard selbst auflösen.
+        # Path.glob() funktioniert auch dann, wenn Windows den
+        # Wildcard-Ausdruck nicht vorher expandiert hat.
+        if any(char in raw_path for char in ("*", "?", "[")):
+            parent = path.parent
+
+            if not parent.exists():
+                # Fallback für relative Wildcard-Pfade.
+                parent = Path(".")
+
+            pattern = path.name
+
+            result.extend(
+                sorted(
+                    p for p in parent.glob(pattern)
+                    if p.is_file() and p.suffix.lower() == ".json"
+                )
+            )
+            continue
+
+        # Nicht gefundener Pfad wird später als Fehler behandelt.
+        result.append(path)
+
+    # Doppelte Dateien entfernen, Reihenfolge beibehalten.
+    unique = []
+    seen = set()
+
+    for path in result:
         try:
-            if int(r.get('iteration'))==n: return r
-        except (TypeError,ValueError): pass
+            key = path.resolve()
+        except OSError:
+            key = path
+
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+
+    return unique
+
+
+def iteration(dataset, number):
+    for result in dataset["results"]:
+        try:
+            if int(result.get("iteration")) == number:
+                return result
+        except (TypeError, ValueError):
+            pass
+
     return None
 
 
-def value(ds,it,metric,db,thread,op):
-    r=iteration(ds,it)
-    if not r: return math.nan
-    if metric=='exec_time': return num((r.get('exec_time') or {}).get(db))
-    d=(r.get('results') or {}).get(db) or {}
-    if metric=='tps': return num(((d.get('tps') or {}).get(str(thread)) or {}).get('successful_transactions_per_second'))
-    if metric=='queryrate': return num(((d.get('queryrate') or {}).get(str(thread)) or {}).get(op))
-    ld=((d.get('latency') or {}).get(str(thread)) or {}).get(op) or {}
-    return num(ld.get(metric.removeprefix('latency_')+'_ms'))
+def value(dataset, iteration_number, metric, db, thread, operation):
+    result = iteration(dataset, iteration_number)
+
+    if not result:
+        return math.nan
+
+    if metric == "exec_time":
+        return num((result.get("exec_time") or {}).get(db))
+
+    database = (result.get("results") or {}).get(db) or {}
+
+    if metric == "tps":
+        return num(
+            (
+                (database.get("tps") or {}).get(str(thread))
+                or {}
+            ).get("successful_transactions_per_second")
+        )
+
+    if metric == "queryrate":
+        return num(
+            (
+                (database.get("queryrate") or {}).get(str(thread))
+                or {}
+            ).get(operation)
+        )
+
+    latency = (
+        (database.get("latency") or {}).get(str(thread))
+        or {}
+    ).get(operation) or {}
+
+    return num(
+        latency.get(
+            metric.removeprefix("latency_") + "_ms"
+        )
+    )
 
 
-def label(ds, mode, idx):
-    hw=ds['hardware']; c=hw.get('cpu',{}); r=hw.get('ram',{})
-    ram=num(r.get('size_gb'))
-    hardware=f"{cpu_name(hw)} · {c.get('cores','?')}C/{c.get('threads','?')}T · {ram:.1f} GB" if not math.isnan(ram) else f"{cpu_name(hw)} · {c.get('cores','?')}C/{c.get('threads','?')}T"
-    if mode=='anonym': return hardware
-    if mode=='competition': return hardware if ds.get('is_competitor') else f'Teilnehmer {idx+1}'
-    return hardware + (f"\n{ds['test_code']}" if ds.get('test_code') else '')
+def label(dataset, mode, index):
+    hardware = dataset["hardware"]
+
+    cpu = hardware.get("cpu", {})
+    ram = hardware.get("ram", {})
+
+    ram_size = num(ram.get("size_gb"))
+
+    if not math.isnan(ram_size):
+        hardware_label = (
+            f"{cpu_name(hardware)} · "
+            f"{cpu.get('cores', '?')}C/"
+            f"{cpu.get('threads', '?')}T · "
+            f"{ram_size:.1f} GB"
+        )
+    else:
+        hardware_label = (
+            f"{cpu_name(hardware)} · "
+            f"{cpu.get('cores', '?')}C/"
+            f"{cpu.get('threads', '?')}T"
+        )
+
+    if mode == "anonym":
+        return hardware_label
+
+    if mode == "competition":
+        if dataset.get("is_competitor"):
+            return hardware_label
+
+        return f"Teilnehmer {index + 1}"
+
+    if dataset.get("test_code"):
+        return hardware_label + f"\n{dataset['test_code']}"
+
+    return hardware_label
 
 
-def draw(ax, datasets, metric, db_mode, thread, op, mode, competitor, groups):
+def draw(
+    ax,
+    datasets,
+    metric,
+    db_mode,
+    thread,
+    operation,
+    mode,
+    competitor,
+    groups,
+):
     ax.clear()
+
     if not datasets:
-        ax.text(.5,.5,'Keine Benchmarks geladen',ha='center',va='center'); ax.set_axis_off(); return
-    ds=list(datasets)
-    rank={'highend':0,'midrange':1,'lowend':2,'unknown':3}
-    if groups: ds.sort(key=lambda x:(rank.get(x['category'],9), label(x,'normal',0).lower()))
-    comp=(competitor or '').strip().lower()
-    for x in ds: x['is_competitor']=bool(comp and x.get('test_code','').lower()==comp)
-    dbs=DBS if db_mode=='both' else [db_mode]
-    ndb=len(dbs); bw=.14 if ndb==1 else .075
-    group_w=5*ndb*bw; gap=bw*3
-    centers=[]
-    for i,d in enumerate(ds):
-        center=i*(group_w+gap); centers.append(center)
-        start=center-group_w/2
-        for it in range(1,6):
-            for j,db in enumerate(dbs):
-                x=start+((it-1)*ndb+j+.5)*bw
-                v=value(d,it,metric,thread,op) if False else value(d,it,metric,db,thread,op)
-                b=ax.bar(x, 0 if math.isnan(v) else v, width=bw*.9, label=DB_LABELS[db] if i==0 else None)
-                if d['is_competitor']: b[0].set_hatch('//')
-                if math.isnan(v): b[0].set_alpha(.15)
-    ax.set_xticks(centers); ax.set_xticklabels([label(d,mode,i) for i,d in enumerate(ds)],rotation=18,ha='right')
-    for center in centers:
-        for it in range(1,6):
-            off=((it-.5)*ndb)*bw
-            ax.text(center-group_w/2+off, -.045, str(it), transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=9)
+        ax.text(
+            0.5,
+            0.5,
+            "Keine Benchmarks geladen",
+            ha="center",
+            va="center",
+        )
+        ax.set_axis_off()
+        return
+
+    datasets = list(datasets)
+
+    rank = {
+        "highend": 0,
+        "midrange": 1,
+        "lowend": 2,
+        "unknown": 3,
+    }
+
     if groups:
-        last=None
-        for i,d in enumerate(ds):
-            if d['category']!=last:
-                if i: ax.axvline((centers[i-1]+centers[i])/2,ls='--',lw=.8,alpha=.5)
-                last=d['category']
-    unit='ms' if metric.startswith('latency_') or metric=='exec_time' else ('Transaktionen/s' if metric=='tps' else 'Operationen/s')
-    title=METRICS[metric]
-    if metric!='exec_time': title+=f' · {op.upper()} · {thread} Threads' if metric!='tps' else f' · {thread} Threads'
-    ax.set_title(title); ax.set_ylabel(f'{METRICS[metric]} [{unit}]'); ax.grid(axis='y',alpha=.25); ax.set_axisbelow(True); ax.legend()
-    ax.figure.subplots_adjust(bottom=.30,left=.09,right=.98,top=.90)
+        datasets.sort(
+            key=lambda dataset: (
+                rank.get(dataset["category"], 9),
+                label(dataset, "normal", 0).lower(),
+            )
+        )
+
+    competitor = (competitor or "").strip().lower()
+
+    for dataset in datasets:
+        dataset["is_competitor"] = bool(
+            competitor
+            and dataset.get("test_code", "").lower() == competitor
+        )
+
+    dbs = DBS if db_mode == "both" else [db_mode]
+
+    number_of_databases = len(dbs)
+
+    bar_width = (
+        0.14
+        if number_of_databases == 1
+        else 0.075
+    )
+
+    group_width = (
+        5
+        * number_of_databases
+        * bar_width
+    )
+
+    gap = bar_width * 3
+
+    centers = []
+
+    for dataset_index, dataset in enumerate(datasets):
+        center = dataset_index * (group_width + gap)
+        centers.append(center)
+
+        start = center - group_width / 2
+
+        for iteration_number in range(1, 6):
+            for database_index, database in enumerate(dbs):
+                x = (
+                    start
+                    + (
+                        (iteration_number - 1)
+                        * number_of_databases
+                        + database_index
+                        + 0.5
+                    )
+                    * bar_width
+                )
+
+                value_result = value(
+                    dataset,
+                    iteration_number,
+                    metric,
+                    database,
+                    thread,
+                    operation,
+                )
+
+                bar = ax.bar(
+                    x,
+                    0 if math.isnan(value_result) else value_result,
+                    width=bar_width * 0.9,
+                    label=(
+                        DB_LABELS[database]
+                        if dataset_index == 0
+                        else None
+                    ),
+                )
+
+                if dataset["is_competitor"]:
+                    bar[0].set_hatch("//")
+
+                if math.isnan(value_result):
+                    bar[0].set_alpha(0.15)
+
+    ax.set_xticks(centers)
+
+    ax.set_xticklabels(
+        [
+            label(dataset, mode, index)
+            for index, dataset in enumerate(datasets)
+        ],
+        rotation=18,
+        ha="right",
+    )
+
+    for center in centers:
+        for iteration_number in range(1, 6):
+            offset = (
+                (iteration_number - 0.5)
+                * number_of_databases
+                * bar_width
+            )
+
+            ax.text(
+                center - group_width / 2 + offset,
+                -0.045,
+                str(iteration_number),
+                transform=ax.get_xaxis_transform(),
+                ha="center",
+                va="top",
+                fontsize=9,
+            )
+
+    if groups:
+        last_category = None
+
+        for index, dataset in enumerate(datasets):
+            if dataset["category"] != last_category:
+                if index:
+                    ax.axvline(
+                        (
+                            centers[index - 1]
+                            + centers[index]
+                        ) / 2,
+                        linestyle="--",
+                        linewidth=0.8,
+                        alpha=0.5,
+                    )
+
+                last_category = dataset["category"]
+
+    unit = (
+        "ms"
+        if metric.startswith("latency_")
+        or metric == "exec_time"
+        else (
+            "Transaktionen/s"
+            if metric == "tps"
+            else "Operationen/s"
+        )
+    )
+
+    title = METRICS[metric]
+
+    if metric != "exec_time":
+        if metric == "tps":
+            title += f" · {thread} Threads"
+        else:
+            title += (
+                f" · {operation.upper()} · "
+                f"{thread} Threads"
+            )
+
+    ax.set_title(title)
+    ax.set_ylabel(
+        f"{METRICS[metric]} [{unit}]"
+    )
+
+    ax.grid(
+        axis="y",
+        alpha=0.25,
+    )
+
+    ax.set_axisbelow(True)
+    ax.legend()
+
+    ax.figure.subplots_adjust(
+        bottom=0.30,
+        left=0.09,
+        right=0.98,
+        top=0.90,
+    )
 
 
 class App:
-    def __init__(self,root,files=(),mode='anonym',competitor='',groups=True):
-        self.root=root; root.title('SQLite vs. LiteDB – Benchmark Visualizer'); root.geometry('1450x900'); self.ds=[]
-        self.metric=tk.StringVar(value='queryrate'); self.db=tk.StringVar(value='sqlite'); self.thread=tk.StringVar(value='1'); self.op=tk.StringVar(value='select'); self.mode=tk.StringVar(value=mode); self.comp=tk.StringVar(value=competitor); self.groups=tk.BooleanVar(value=groups)
-        f=ttk.Frame(root,padding=8); f.pack(fill='x')
-        ttk.Button(f,text='JSON laden',command=self.select).grid(row=0,column=0,padx=4); ttk.Button(f,text='Alles löschen',command=self.clear).grid(row=0,column=1,padx=4)
-        for col,text,var,vals in [(2,'Metrik',self.metric,list(METRICS)),(4,'DB',self.db,['sqlite','litedb','both']),(6,'Threads',self.thread,['1','2','4','8','16']),(8,'Operation',self.op,OPS)]:
-            ttk.Label(f,text=text+':').grid(row=0,column=col,padx=(18,3)); ttk.Combobox(f,textvariable=var,values=vals,state='readonly',width=14).grid(row=0,column=col+1)
-        ttk.Label(f,text='Modus:').grid(row=1,column=0); ttk.Combobox(f,textvariable=self.mode,values=['anonym','competition','normal'],state='readonly',width=14).grid(row=1,column=1)
-        ttk.Label(f,text='Konkurrenz-Code:').grid(row=1,column=2,padx=(18,3)); ttk.Entry(f,textvariable=self.comp,width=20).grid(row=1,column=3)
-        ttk.Checkbutton(f,text='Specification-Gruppen',variable=self.groups).grid(row=1,column=4,columnspan=2,sticky='w',padx=18)
-        left=ttk.Frame(root,padding=8); left.pack(side='left',fill='y'); ttk.Label(left,text='Geladene Benchmarks').pack(anchor='w')
-        self.tree=ttk.Treeview(left,columns=('category','cpu','test'),show='headings',height=28); [self.tree.heading(c,text=t) for c,t in [('category','Kategorie'),('cpu','CPU'),('test','Test')]]; self.tree.column('category',width=95); self.tree.column('cpu',width=250); self.tree.column('test',width=100); self.tree.pack(fill='y',expand=True)
-        right=ttk.Frame(root,padding=8); right.pack(side='right',fill='both',expand=True); self.fig,self.ax=plt.subplots(figsize=(12,7)); self.canvas=FigureCanvasTkAgg(self.fig,master=right); self.canvas.get_tk_widget().pack(fill='both',expand=True)
-        for v in [self.metric,self.db,self.thread,self.op,self.mode,self.comp,self.groups]: v.trace_add('write',lambda *_: self.draw())
+    def __init__(
+        self,
+        root,
+        files=(),
+        mode="anonym",
+        competitor="",
+        groups=True,
+    ):
+        self.root = root
+
+        root.title(
+            "SQLite vs. LiteDB – Benchmark Visualizer"
+        )
+
+        root.geometry("1450x900")
+
+        self.ds = []
+
+        self.metric = tk.StringVar(
+            value="queryrate"
+        )
+
+        self.db = tk.StringVar(
+            value="sqlite"
+        )
+
+        self.thread = tk.StringVar(
+            value="1"
+        )
+
+        self.op = tk.StringVar(
+            value="select"
+        )
+
+        self.mode = tk.StringVar(
+            value=mode
+        )
+
+        self.comp = tk.StringVar(
+            value=competitor
+        )
+
+        self.groups = tk.BooleanVar(
+            value=groups
+        )
+
+        frame = ttk.Frame(
+            root,
+            padding=8,
+        )
+
+        frame.pack(fill="x")
+
+        ttk.Button(
+            frame,
+            text="JSON laden",
+            command=self.select,
+        ).grid(
+            row=0,
+            column=0,
+            padx=4,
+        )
+
+        ttk.Button(
+            frame,
+            text="Alles löschen",
+            command=self.clear,
+        ).grid(
+            row=0,
+            column=1,
+            padx=4,
+        )
+
+        controls = [
+            (
+                2,
+                "Metrik",
+                self.metric,
+                list(METRICS),
+            ),
+            (
+                4,
+                "DB",
+                self.db,
+                ["sqlite", "litedb", "both"],
+            ),
+            (
+                6,
+                "Threads",
+                self.thread,
+                ["1", "2", "4", "8", "16"],
+            ),
+            (
+                8,
+                "Operation",
+                self.op,
+                OPS,
+            ),
+        ]
+
+        for column, text, variable, values in controls:
+            ttk.Label(
+                frame,
+                text=text + ":",
+            ).grid(
+                row=0,
+                column=column,
+                padx=(18, 3),
+            )
+
+            ttk.Combobox(
+                frame,
+                textvariable=variable,
+                values=values,
+                state="readonly",
+                width=14,
+            ).grid(
+                row=0,
+                column=column + 1,
+            )
+
+        ttk.Label(
+            frame,
+            text="Modus:",
+        ).grid(
+            row=1,
+            column=0,
+        )
+
+        ttk.Combobox(
+            frame,
+            textvariable=self.mode,
+            values=[
+                "anonym",
+                "competition",
+                "normal",
+            ],
+            state="readonly",
+            width=14,
+        ).grid(
+            row=1,
+            column=1,
+        )
+
+        ttk.Label(
+            frame,
+            text="Konkurrenz-Code:",
+        ).grid(
+            row=1,
+            column=2,
+            padx=(18, 3),
+        )
+
+        ttk.Entry(
+            frame,
+            textvariable=self.comp,
+            width=20,
+        ).grid(
+            row=1,
+            column=3,
+        )
+
+        ttk.Checkbutton(
+            frame,
+            text="Specification-Gruppen",
+            variable=self.groups,
+        ).grid(
+            row=1,
+            column=4,
+            columnspan=2,
+            sticky="w",
+            padx=18,
+        )
+
+        left = ttk.Frame(
+            root,
+            padding=8,
+        )
+
+        left.pack(
+            side="left",
+            fill="y",
+        )
+
+        ttk.Label(
+            left,
+            text="Geladene Benchmarks",
+        ).pack(
+            anchor="w"
+        )
+
+        self.tree = ttk.Treeview(
+            left,
+            columns=(
+                "category",
+                "cpu",
+                "test",
+            ),
+            show="headings",
+            height=28,
+        )
+
+        for column, title in [
+            ("category", "Kategorie"),
+            ("cpu", "CPU"),
+            ("test", "Test"),
+        ]:
+            self.tree.heading(
+                column,
+                text=title,
+            )
+
+        self.tree.column(
+            "category",
+            width=95,
+        )
+
+        self.tree.column(
+            "cpu",
+            width=250,
+        )
+
+        self.tree.column(
+            "test",
+            width=100,
+        )
+
+        self.tree.pack(
+            fill="y",
+            expand=True,
+        )
+
+        right = ttk.Frame(
+            root,
+            padding=8,
+        )
+
+        right.pack(
+            side="right",
+            fill="both",
+            expand=True,
+        )
+
+        self.fig, self.ax = plt.subplots(
+            figsize=(12, 7)
+        )
+
+        self.canvas = FigureCanvasTkAgg(
+            self.fig,
+            master=right,
+        )
+
+        self.canvas.get_tk_widget().pack(
+            fill="both",
+            expand=True,
+        )
+
+        variables = [
+            self.metric,
+            self.db,
+            self.thread,
+            self.op,
+            self.mode,
+            self.comp,
+            self.groups,
+        ]
+
+        for variable in variables:
+            variable.trace_add(
+                "write",
+                lambda *_: self.draw(),
+            )
+
         self.load(files)
+
     def select(self):
-        p=filedialog.askopenfilenames(filetypes=[('JSON','*.json'),('Alle','*.*')]); self.load(p)
-    def load(self,paths):
-        errs=[]
-        for p in paths:
-            try:self.ds.append(load(p))
-            except Exception as e:errs.append(f'{Path(p).name}: {e}')
-        self.tree.delete(*self.tree.get_children())
-        for d in self.ds:self.tree.insert('','end',values=(CATEGORIES[d['category']],cpu_name(d['hardware']),d['test_code'] or '—'))
+        paths = filedialog.askopenfilenames(
+            filetypes=[
+                ("JSON", "*.json"),
+                ("Alle", "*.*"),
+            ]
+        )
+
+        self.load(paths)
+
+    def load(self, paths):
+        expanded_paths = expand_input_paths(paths)
+
+        errors = []
+
+        for path in expanded_paths:
+            try:
+                self.ds.append(load(path))
+            except Exception as error:
+                errors.append(
+                    f"{Path(path).name}: {error}"
+                )
+
+        self.tree.delete(
+            *self.tree.get_children()
+        )
+
+        for dataset in self.ds:
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    CATEGORIES[
+                        dataset["category"]
+                    ],
+                    cpu_name(
+                        dataset["hardware"]
+                    ),
+                    dataset["test_code"] or "—",
+                ),
+            )
+
         self.draw()
-        if errs:messagebox.showerror('Fehler', '\n'.join(errs))
-    def clear(self):self.ds.clear(); self.tree.delete(*self.tree.get_children()); self.draw()
-    def draw(self):draw(self.ax,self.ds,self.metric.get(),self.db.get(),int(self.thread.get()),self.op.get(),self.mode.get(),self.comp.get(),self.groups.get()); self.canvas.draw_idle()
+
+        if errors:
+            messagebox.showerror(
+                "Fehler",
+                "\n".join(errors),
+            )
+
+    def clear(self):
+        self.ds.clear()
+
+        self.tree.delete(
+            *self.tree.get_children()
+        )
+
+        self.draw()
+
+    def draw(self):
+        draw(
+            self.ax,
+            self.ds,
+            self.metric.get(),
+            self.db.get(),
+            int(self.thread.get()),
+            self.op.get(),
+            self.mode.get(),
+            self.comp.get(),
+            self.groups.get(),
+        )
+
+        self.canvas.draw_idle()
 
 
-def boolean(v):
-    v=v.lower();
-    if v in ('true','1','yes','ja','on'):return True
-    if v in ('false','0','no','nein','off'):return False
-    raise argparse.ArgumentTypeError('true/false erwartet')
+def boolean(value):
+    value = value.lower()
+
+    if value in (
+        "true",
+        "1",
+        "yes",
+        "ja",
+        "on",
+    ):
+        return True
+
+    if value in (
+        "false",
+        "0",
+        "no",
+        "nein",
+        "off",
+    ):
+        return False
+
+    raise argparse.ArgumentTypeError(
+        "true/false erwartet"
+    )
 
 
 def main():
-    p=argparse.ArgumentParser(); p.add_argument('files',nargs='*'); p.add_argument('--type',choices=['anonym','competition','normal'],default='anonym'); p.add_argument('--competitor',default=''); p.add_argument('--enableSpecificationGroups',type=boolean,default=True); p.add_argument('--metric',choices=list(METRICS),default='queryrate'); p.add_argument('--db',choices=['sqlite','litedb','both'],default='sqlite'); p.add_argument('--threads',type=int,choices=[1,2,4,8,16],default=1); p.add_argument('--operation',choices=OPS,default='select'); a=p.parse_args()
-    root=tk.Tk(); app=App(root,a.files,a.type,a.competitor,a.enableSpecificationGroups); app.metric.set(a.metric); app.db.set(a.db); app.thread.set(str(a.threads)); app.op.set(a.operation); root.mainloop()
-if __name__=='__main__':main()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help=(
+            "JSON-Dateien, JSON-Wildcards oder "
+            "Ordner mit JSON-Dateien"
+        ),
+    )
+
+    parser.add_argument(
+        "--type",
+        choices=[
+            "anonym",
+            "competition",
+            "normal",
+        ],
+        default="anonym",
+    )
+
+    parser.add_argument(
+        "--competitor",
+        default="",
+    )
+
+    parser.add_argument(
+        "--enableSpecificationGroups",
+        type=boolean,
+        default=True,
+    )
+
+    parser.add_argument(
+        "--metric",
+        choices=list(METRICS),
+        default="queryrate",
+    )
+
+    parser.add_argument(
+        "--db",
+        choices=[
+            "sqlite",
+            "litedb",
+            "both",
+        ],
+        default="sqlite",
+    )
+
+    parser.add_argument(
+        "--threads",
+        type=int,
+        choices=[
+            1,
+            2,
+            4,
+            8,
+            16,
+        ],
+        default=1,
+    )
+
+    parser.add_argument(
+        "--operation",
+        choices=OPS,
+        default="select",
+    )
+
+    args = parser.parse_args()
+
+    root = tk.Tk()
+
+    app = App(
+        root,
+        args.files,
+        args.type,
+        args.competitor,
+        args.enableSpecificationGroups,
+    )
+
+    app.metric.set(args.metric)
+    app.db.set(args.db)
+    app.thread.set(str(args.threads))
+    app.op.set(args.operation)
+
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
+
