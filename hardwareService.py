@@ -24,6 +24,7 @@ class CPUProfile:
 
 
 CPU_PROFILES: tuple[CPUProfile, ...] = (
+    # AMD Ryzen 7000 / Zen 4
     CPUProfile(
         processor="AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
         cores=8,
@@ -33,13 +34,113 @@ CPU_PROFILES: tuple[CPUProfile, ...] = (
     ),
     CPUProfile(
         processor="AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+        cores=8,
+        threads=16,
+        frequency_max_mhz=4201.0,
+        name="AMD Ryzen 7 7800X3D",
+    ),
+    CPUProfile(
+        processor="AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
         cores=6,
         threads=12,
         frequency_max_mhz=3701.0,
         name="AMD Ryzen 5 7500F",
     ),
-)
+    CPUProfile(
+        processor="AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+        cores=6,
+        threads=12,
+        frequency_max_mhz=3801.0,
+        name="AMD Ryzen 5 7600",
+    ),
 
+    CPUProfile(
+        processor="AMD64 Family 25 Model 33 Stepping 2, AuthenticAMD",
+        cores=6,
+        threads=12,
+        frequency_max_mhz=3701.0,
+        name="AMD Ryzen 5 5600X",
+    ),
+
+    # AMD Ryzen 3000
+    CPUProfile(
+        processor="AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD",
+        cores=6,
+        threads=12,
+        frequency_max_mhz=3593.0,
+        name="AMD Ryzen 5 3600",
+    ),
+
+    # AMD Ryzen 2000
+    CPUProfile(
+        processor="AMD64 Family 23 Model 8 Stepping 2, AuthenticAMD",
+        cores=8,
+        threads=16,
+        frequency_max_mhz=3700.0,
+        name="AMD Ryzen 7 2700X",
+    ),
+
+    # AMD mobile
+    CPUProfile(
+        processor="AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+        cores=6,
+        threads=12,
+        frequency_max_mhz=2100.0,
+        name="AMD Ryzen 5 5500U",
+    ),
+
+    # AMD Ryzen 9000 / Zen 5
+    CPUProfile(
+        processor="AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        cores=16,
+        threads=32,
+        frequency_max_mhz=4300.0,
+        name="AMD Ryzen 9 9950X3D",
+    ),
+
+    # Intel 14th Gen
+    CPUProfile(
+        processor="Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+        cores=20,
+        threads=28,
+        frequency_max_mhz=3400.0,
+        name="Intel Core i7-14700K",
+    ),
+
+    # Intel 13th Gen mobile
+    CPUProfile(
+        processor="Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
+        cores=10,
+        threads=12,
+        frequency_max_mhz=1300.0,
+        name="Intel Core i5-1335U",
+    ),
+
+    # Intel 8th/9th Gen
+    CPUProfile(
+        processor="Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+        cores=6,
+        threads=12,
+        frequency_max_mhz=2001.0,
+        name="Intel Core i7-8700",
+    ),
+    CPUProfile(
+        processor="Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+        cores=6,
+        threads=6,
+        frequency_max_mhz=2904.0,
+        name="Intel Core i5-9400F",
+    ),
+
+    # Intel mobile
+    CPUProfile(
+        processor="Intel64 Family 6 Model 142 Stepping 10, GenuineIntel",
+        cores=4,
+        threads=8,
+        frequency_max_mhz=1896.0,
+        name="Intel Core i7-8559U",
+    ),
+)
 
 def _number(value: Any) -> float | None:
     try:
