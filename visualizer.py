@@ -115,6 +115,17 @@ def test_code(data):
     return ""
 
 
+def participant_name(path):
+    path = Path(path)
+    stem = path.stem
+
+    if "_" not in stem:
+        return ""
+
+    name = stem.rsplit("_", 1)[-1].strip()
+    return name
+
+
 def load(path):
     path = Path(path)
 
@@ -126,6 +137,7 @@ def load(path):
 
     return {
         "path": path,
+        "participant_name": participant_name(path),
         "hardware": data.get("hardware", {}),
         "results": data["results"],
         "category": category(data.get("hardware", {})),
@@ -286,10 +298,15 @@ def label(dataset, mode, index):
         return hardware_label
 
     if mode == "competition":
-        if dataset.get("is_competitor"):
-            return hardware_label
+        # Der Teilnehmername stammt aus dem Ergebnis-Dateinamen.
+        # Nicht mehr künstlich "Teilnehmer 1", "Teilnehmer 2", ...
+        # erzeugen.
+        participant = dataset.get("participant_name") or f"Teilnehmer {index + 1}"
 
-        return f"Teilnehmer {index + 1}"
+        if dataset.get("is_competitor"):
+            return participant + "\\n" + hardware_label
+
+        return participant
 
     if dataset.get("test_code"):
         return hardware_label + f"\n{dataset['test_code']}"
@@ -415,21 +432,22 @@ def draw(
     # In competition mode they stay horizontal so there is no second
     # rotated rendering that can visually merge with the horizontal one.
     xlabels = [
-        label(dataset, mode, index)
+        matplotlib_label(label(dataset, mode, index))
         for index, dataset in enumerate(datasets)
     ]
 
     ax.set_xticks(centers)
     ax.set_xticklabels(
         xlabels,
+        # Competition: participant names horizontal and centered.
+        # Normal/anonym: hardware configuration stays rotated, but is
+        # centered on the dataset group instead of being right-aligned.
         rotation=90,
-        ha="center" if mode == "competition" else "right",
+        ha="center",
         va="top",
     )
 
-    # Keep the rotated names clearly below the iteration numbers (1..5).
-    # Competition labels are also given a little extra room so long names
-    # cannot collide with the plot area.
+    # Keep labels clearly below the 1..5 iteration row.
     ax.tick_params(
         axis="x",
         which="major",
@@ -514,7 +532,8 @@ def draw(
         right=0.98,
         top=0.90,
     )
-
+def matplotlib_label(value):
+    return str(value).replace("$", r"\$")
 
 class App:
     def __init__(
