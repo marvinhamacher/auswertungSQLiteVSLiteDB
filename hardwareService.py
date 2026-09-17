@@ -16,6 +16,9 @@ class CPUProfile:
     frequency_tolerance_mhz: float = 10.0
 
 
+# Family/Model alone is deliberately not used because several CPUs share the
+# same Windows processor identification string. Core/thread count and the
+# observed maximum frequency distinguish the profiles in this benchmark set.
 CPU_PROFILES: tuple[CPUProfile, ...] = (
     # AMD Ryzen 9000 / Zen 5
     CPUProfile(

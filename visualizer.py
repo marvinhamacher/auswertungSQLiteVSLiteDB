@@ -50,12 +50,16 @@ CATEGORIES = {
 COLOR_MODES = {
     "hardware": "Hardware",
     "akribisch": "Akribisch",
+    "datenbank": "Datenbank (SQLite / LiteDB)",
+}
+
+DB_COLORS = {
+    "sqlite": "#4C78A8",
+    "litedb": "#F58518",
 }
 
 CUSTOM_CPU_CATEGORY_MAP = {}
 
-# Explicit, editable hardware tiers. RAM capacity must not turn an old CPU
-# into "High-End" merely because it has a lot of memory.
 CPU_HARDWARE_LEVELS = {
     "AMD Ryzen 9 9950X": "highend",
     "AMD Ryzen 7 7800X3D": "highend",
@@ -76,9 +80,6 @@ CPU_HARDWARE_LEVELS = {
     "Intel Core i7-8559U": "lowend",
 }
 
-# A compact base palette is used first. If more systems are loaded, colors
-# continue deterministically through HSV instead of failing or repeating too
-# early.
 BASE_COLORS = [
     "#4C78A8", "#F58518", "#E45756", "#72B7B2", "#54A24B",
     "#EECA3B", "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC",
@@ -339,18 +340,17 @@ def palette_color(index):
 
 def color_for(index, db, mode, same_db_color):
     """Return a deterministic color for the selected color mode."""
+    if mode == "datenbank":
+        return DB_COLORS[db]
+
     if same_db_color:
         return palette_color(index)
 
-    # With separate DB colors, keep SQLite/LiteDB visibly distinct while still
-    # giving every benchmark its own base color.
+    # Hardware/akribisch mode with separate DB colors: derive a stable variant
+    # from the dataset color so SQLite and LiteDB remain distinguishable.
     base = palette_color(index)
-    rgb = base if not isinstance(base, str) else None
-    if rgb is None:
-        from matplotlib.colors import to_rgb, rgb_to_hsv, hsv_to_rgb as _hsv_to_rgb
-        hsv = rgb_to_hsv(to_rgb(base))
-    else:
-        hsv = rgb_to_hsv(rgb)
+    from matplotlib.colors import to_rgb, rgb_to_hsv, hsv_to_rgb as _hsv_to_rgb
+    hsv = rgb_to_hsv(to_rgb(base))
     hsv[0] = (hsv[0] + (0.08 if db == "litedb" else 0.0)) % 1.0
     return _hsv_to_rgb(hsv)
 
@@ -406,10 +406,12 @@ def draw(
         if key not in color_keys:
             color_keys[key] = len(color_keys)
 
-    # Wider groups make the iteration labels and competition test codes readable.
+    # Deliberately generous spacing between result groups. With many (e.g. 20)
+    # results, the test code and five iteration markers must remain visually
+    # separable instead of becoming one dense block.
     bar_width = 0.12 if number_of_databases == 1 else 0.065
     group_width = 5 * number_of_databases * bar_width
-    group_gap = max(bar_width * 7, 0.32)
+    group_gap = max(bar_width * 12, 0.72)
 
     centers = []
     plotted_values = []
@@ -557,7 +559,15 @@ def draw(
     # Deliberately compact legend: only explain encodings that are not already
     # obvious from the x-axis. This avoids one legend entry per hardware system.
     legend_handles = []
-    if db_mode == "both":
+    if color_mode == "datenbank":
+        if db_mode == "both":
+            legend_handles.extend([
+                Patch(facecolor=DB_COLORS["sqlite"], label="SQLite"),
+                Patch(facecolor=DB_COLORS["litedb"], label="LiteDB"),
+            ])
+        elif db_mode in DB_LABELS:
+            legend_handles.append(Patch(facecolor=DB_COLORS[db_mode], label=DB_LABELS[db_mode]))
+    elif db_mode == "both":
         if same_db_color:
             legend_handles.append(Patch(facecolor=BASE_COLORS[0], label="SQLite / LiteDB"))
         else:
@@ -663,6 +673,9 @@ class App:
         ttk.Checkbutton(
             frame, text="SQLite/LiteDB gleiche Farbe", variable=self.same_db_color,
         ).grid(row=1, column=6, padx=(18, 3), sticky="w")
+        ttk.Label(
+            frame, text="Datenbank-Modus = feste SQLite/LiteDB-Farben",
+        ).grid(row=1, column=7, padx=(12, 3), sticky="w")
 
         options = ttk.Frame(root, padding=(8, 0, 8, 4))
         options.pack(fill="x")
