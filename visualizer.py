@@ -255,6 +255,8 @@ def value(dataset, iteration_number, metric, db, thread, operation):
         )
     )
 
+def matplotlib_label(value):
+    return str(value).replace("$", r"\$")
 
 def label(dataset, mode, index):
     hardware = dataset["hardware"]
@@ -408,7 +410,7 @@ def draw(
 
     ax.set_xticklabels(
         [
-            label(dataset, mode, index)
+            matplotlib_label(label(dataset, mode, index))
             for index, dataset in enumerate(datasets)
         ],
         rotation=18,
