@@ -80,6 +80,7 @@ CPU_HARDWARE_LEVELS = {
     "Intel Core i7-8559U": "lowend",
 }
 
+
 BASE_COLORS = [
     "#4C78A8", "#F58518", "#E45756", "#72B7B2", "#54A24B",
     "#EECA3B", "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC",
@@ -117,8 +118,6 @@ def category(hw):
     verified_name = get_cpu_display_name(hw)
     if verified_name in CPU_HARDWARE_LEVELS:
         return CPU_HARDWARE_LEVELS[verified_name]
-
-    # Fallback for CPUs not yet added to CPU_HARDWARE_LEVELS.
     score = score_hardware(hw)
     if score <= 349:
         return "lowend"
@@ -317,7 +316,6 @@ def label(dataset, mode, index):
 
 
 def dataset_identity(dataset):
-    """Stable identity for color assignment."""
     hw = dataset.get("hardware", {})
     cpu = hw.get("cpu", {})
     ram = hw.get("ram", {})
