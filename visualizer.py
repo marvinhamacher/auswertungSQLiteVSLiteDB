@@ -152,8 +152,6 @@ def test_code(data, path: Path | None = None):
             if metadata.get(key) not in (None, ""):
                 return str(metadata[key])
 
-    # The benchmark export used in this project stores the test identifier in
-    # the directory name. Fall back to the final filename component as well.
     if path is not None:
         parent = path.parent.name.strip()
         if parent and parent.lower() not in {"dbresults", "results", "json"}:
@@ -297,6 +295,10 @@ def hardware_label(dataset):
     return text
 
 
+def matplotlib_label(value):
+    return str(value).replace("$", r"\$")
+
+
 def label(dataset, mode, index):
     hardware_text = hardware_label(dataset)
     code = dataset.get("test_code", "")
@@ -333,21 +335,17 @@ def palette_color(index):
     if index < len(BASE_COLORS):
         return BASE_COLORS[index]
 
-    # Continue with well-spaced hues for arbitrarily many benchmark groups.
     hue = (index * 0.618033988749895) % 1.0
     return hsv_to_rgb((hue, 0.58, 0.82))
 
 
 def color_for(index, db, mode, same_db_color):
-    """Return a deterministic color for the selected color mode."""
     if mode == "datenbank":
         return DB_COLORS[db]
 
     if same_db_color:
         return palette_color(index)
 
-    # Hardware/akribisch mode with separate DB colors: derive a stable variant
-    # from the dataset color so SQLite and LiteDB remain distinguishable.
     base = palette_color(index)
     from matplotlib.colors import to_rgb, rgb_to_hsv, hsv_to_rgb as _hsv_to_rgb
     hsv = rgb_to_hsv(to_rgb(base))
@@ -398,17 +396,12 @@ def draw(
     dbs = DBS if db_mode == "both" else [db_mode]
     number_of_databases = len(dbs)
 
-    # Hardware mode reuses a color for identical hardware; Akribisch mode
-    # assigns one color per loaded benchmark dataset.
     color_keys = {}
     for dataset in datasets:
         key = dataset_identity(dataset) if color_mode == "hardware" else str(dataset.get("path", id(dataset)))
         if key not in color_keys:
             color_keys[key] = len(color_keys)
 
-    # Deliberately generous spacing between result groups. With many (e.g. 20)
-    # results, the test code and five iteration markers must remain visually
-    # separable instead of becoming one dense block.
     bar_width = 0.12 if number_of_databases == 1 else 0.065
     group_width = 5 * number_of_databases * bar_width
     group_gap = max(bar_width * 12, 0.72)
@@ -468,12 +461,11 @@ def draw(
 
     ax.set_xticks(centers)
     ax.set_xticklabels(
-        [label(dataset, mode, index) for index, dataset in enumerate(datasets)],
+        [matplotlib_label(label(dataset, mode, index)) for index, dataset in enumerate(datasets)],
         rotation=18,
         ha="right",
     )
 
-    # Iteration numbers directly below each five-iteration group.
     for center in centers:
         for iteration_number in range(1, 6):
             offset = (iteration_number - 0.5) * number_of_databases * bar_width
@@ -487,14 +479,13 @@ def draw(
                 fontsize=8,
             )
 
-    # Competition mode: show the test abbreviation explicitly below the bars.
     if mode == "competition":
         for index, dataset in enumerate(datasets):
             code = dataset.get("test_code") or "—"
             ax.text(
                 centers[index],
                 -0.105,
-                code,
+                matplotlib_label(code),
                 transform=ax.get_xaxis_transform(),
                 ha="center",
                 va="top",
@@ -502,7 +493,6 @@ def draw(
                 fontweight="bold" if dataset["is_competitor"] else "normal",
             )
 
-    # Hardware-level separators and labels.
     if hardware_groups:
         last_category = None
         for index, dataset in enumerate(datasets):
@@ -520,7 +510,7 @@ def draw(
                 ax.text(
                     centers[index] - group_width / 2,
                     1.01,
-                    CATEGORIES.get(current, current),
+                    matplotlib_label(CATEGORIES.get(current, current)),
                     transform=ax.get_xaxis_transform(),
                     ha="left",
                     va="bottom",
@@ -556,8 +546,6 @@ def draw(
     ax.grid(axis="y", alpha=0.25)
     ax.set_axisbelow(True)
 
-    # Deliberately compact legend: only explain encodings that are not already
-    # obvious from the x-axis. This avoids one legend entry per hardware system.
     legend_handles = []
     if color_mode == "datenbank":
         if db_mode == "both":
