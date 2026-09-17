@@ -373,6 +373,9 @@ def color_for(index, db, mode, same_db_color):
     return _hsv_to_rgb(hsv)
 
 
+def matplotlib_label(value):
+    return str(value).replace("$", r"\$")
+
 def draw(
     ax,
     datasets,
@@ -486,8 +489,8 @@ def draw(
 
     ax.set_xticks(centers)
     ax.set_xticklabels(
-        [label(dataset, mode, index) for index, dataset in enumerate(datasets)],
-        rotation=0 if mode == "competition" else 18,
+        [matplotlib_label(label(dataset, mode, index)) for index, dataset in enumerate(datasets)],
+        rotation=90,
         ha="center" if mode == "competition" else "right",
         fontsize=9 if mode == "competition" else 9,
     )
@@ -517,7 +520,7 @@ def draw(
             ax.text(
                 centers[index],
                 -0.105,
-                code,
+                matplotlib_label(code),
                 transform=ax.get_xaxis_transform(),
                 ha="center",
                 va="top",
@@ -543,7 +546,7 @@ def draw(
                 ax.text(
                     centers[index] - group_width / 2,
                     1.01,
-                    CATEGORIES.get(current, current),
+                    matplotlib_label(CATEGORIES.get(current, current)),
                     transform=ax.get_xaxis_transform(),
                     ha="left",
                     va="bottom",
