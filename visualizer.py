@@ -491,7 +491,7 @@ def draw(
     ax.set_xticklabels(
         [matplotlib_label(label(dataset, mode, index)) for index, dataset in enumerate(datasets)],
         rotation=90,
-        ha="center" if mode == "competition" else "right",
+        ha="center",
         fontsize=9 if mode == "competition" else 9,
     )
     # Test codes can legitimately contain '$' and other mathtext characters.
