@@ -98,7 +98,7 @@ CPU_PROFILES: tuple[CPUProfile, ...] = (
     # Intel mobile
     CPUProfile(
         "Intel64 Family 6 Model 142 Stepping 10, GenuineIntel",
-        4, 8, 1896.0, "Intel Core i7-8559U", "DDR4",
+        4, 8, 1896.0, "Intel Core i5-8350U", "DDR4",
     ),
 )
 
