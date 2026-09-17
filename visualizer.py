@@ -10,8 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from hardwareService import get_cpu_display_name
-
+from hardwareService import get_cpu_display_name, get_ram_generation
 
 DB_LABELS = {
     "sqlite": "SQLite",
@@ -88,6 +87,8 @@ def category(hw):
 def cpu_name(hw):
     return get_cpu_display_name(hw)
 
+def ram_gen(hw):
+    return get_ram_generation(hw)
 
 def test_code(data):
     keys = [
@@ -257,11 +258,6 @@ def value(dataset, iteration_number, metric, db, thread, operation):
         )
     )
 
-# diese methode ist nicht sonderlich klug da arbeitsspeicher Übertaktet werden kann
-# und es auch 4800mhz ddr4 kits gibt jedoch sind
-# die sehr selten und keines der Proband:innen hatte abgeänderte Taktraten
-def get_ram_generation(ram_speed):
-    return "DDR5" if ram_speed>=4800 else "DDR4"
 
 def label(dataset, mode, index):
     hardware = dataset["hardware"]
@@ -270,15 +266,14 @@ def label(dataset, mode, index):
     ram = hardware.get("ram", {})
 
     ram_size = num(ram.get("size_gb"))
-    ram_speed = num(ram.get("frequency_mhz"))
-
+    ram_freq = num(ram.get("frequency_mhz"))
 
     if not math.isnan(ram_size):
         hardware_label = (
             f"{cpu_name(hardware)} · "
             f"{cpu.get('cores', '?')}C/"
             f"{cpu.get('threads', '?')}T\n"
-            f"{ram_size:.1f} GB"
+            f"{ram_gen(hardware)}-{ram_size:.1f}GB@{ram_freq}MHZ"
         )
     else:
         hardware_label = (
