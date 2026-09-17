@@ -114,16 +114,23 @@ def test_code(data):
     return ""
 
 
+def infer_test_code(path):
 
+    path = Path(path)
+    generic = {
+        "dbresults", "results", "result", "resultsjson", "json",
+        "benchmark", "benchmarks", "data", "output", "out",
+    }
 
-def test_code_from_path(path: Path) -> str:
-    """Ermittelt das Testkürzel aus dbresults/<Kürzel>/<datei>.json."""
-    for parent in path.resolve().parents:
-        if parent.name.lower() == "dbresults":
-            code = path.resolve().parent.name
-            if code and code.lower() != "dbresults":
-                return code
-            break
+    stem = path.stem.strip()
+    if "_" in stem:
+        candidate = stem.rsplit("_", 1)[-1].strip()
+        if candidate and candidate.lower() not in generic:
+            return candidate
+
+    parent_name = path.parent.name.strip()
+    if parent_name and parent_name.lower() not in generic:
+        return parent_name
 
     return ""
 
@@ -142,10 +149,7 @@ def load(path):
         "hardware": data.get("hardware", {}),
         "results": data["results"],
         "category": category(data.get("hardware", {})),
-        "test_code": (
-            test_code(data)
-            or test_code_from_path(path)
-        ),
+        "test_code": test_code(data) or infer_test_code(path),
     }
 
 
@@ -351,7 +355,7 @@ def draw(
         * bar_width
     )
 
-    gap = bar_width * 9
+    gap = bar_width * 3
 
     centers = []
 
@@ -407,9 +411,8 @@ def draw(
             label(dataset, mode, index)
             for index, dataset in enumerate(datasets)
         ],
-        rotation=35 if mode != "competition" else 0,
-        ha="right" if mode != "competition" else "center",
-        fontsize=9 if mode != "competition" else 10,
+        rotation=18,
+        ha="right",
     )
 
     for center in centers:
@@ -484,7 +487,7 @@ def draw(
     ax.legend()
 
     ax.figure.subplots_adjust(
-        bottom=0.24 if mode == "competition" else 0.30,
+        bottom=0.30,
         left=0.09,
         right=0.98,
         top=0.90,
@@ -578,25 +581,25 @@ class App:
 
         controls = [
             (
-                3,
+                2,
                 "Metrik",
                 self.metric,
                 list(METRICS),
             ),
             (
-                5,
+                4,
                 "DB",
                 self.db,
                 ["sqlite", "litedb", "both"],
             ),
             (
-                7,
+                6,
                 "Threads",
                 self.thread,
                 ["1", "2", "4", "8", "16"],
             ),
             (
-                9,
+                8,
                 "Operation",
                 self.op,
                 OPS,
