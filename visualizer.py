@@ -19,6 +19,34 @@ DB_LABELS = {
 
 DBS = ["sqlite", "litedb"]
 
+COLOR_MODES = ["akribisch", "2farbig", "blockfarbig"]
+
+# Feste Datenbankfarben für den 2farbig-Modus.
+SQLITE_COLOR = "#1976D2"
+LITEDB_COLOR = "#F57C00"
+
+# Jede Teilnehmer-/Hardwaregruppe bekommt im blockfarbig-Modus
+# ein eigenes Farbpaar. SQLite und LiteDB bleiben innerhalb des
+# Blocks klar getrennt, während der nächste Block eine andere
+# Palette verwendet.
+BLOCK_PALETTES = [
+    ("#4C78A8", "#F58518"),
+    ("#54A24B", "#E45756"),
+    ("#72B7B2", "#B279A2"),
+    ("#FF9DA6", "#9D755D"),
+    ("#59A14F", "#EDC948"),
+    ("#4E79A7", "#AF7AA1"),
+    ("#76B7B2", "#E15759"),
+    ("#F28E2B", "#5DA5DA"),
+]
+
+# Akribisch: jeder einzelne Balken erhält eine eigene Farbe.
+AKRIBISCH_COLORS = [
+    "#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
+    "#59A14F", "#EDC948", "#B07AA1", "#FF9DA6",
+    "#9C755F", "#BAB0AC",
+]
+
 OPS = [
     "insert",
     "select",
@@ -314,6 +342,24 @@ def label(dataset, mode, index):
     return hardware_label
 
 
+def bar_color(color_mode, dataset_index, iteration_number, database_index, number_of_databases):
+    """Liefert die Farbe eines einzelnen Balkens je nach Farbmodus."""
+    if color_mode == "2farbig":
+        return SQLITE_COLOR if database_index == 0 else LITEDB_COLOR
+
+    if color_mode == "blockfarbig":
+        sqlite_color, litedb_color = BLOCK_PALETTES[dataset_index % len(BLOCK_PALETTES)]
+        return sqlite_color if database_index == 0 else litedb_color
+
+    # akribisch: wirklich jeder Balken bekommt eine eigene Farbe.
+    bar_index = (
+        dataset_index * 5 * number_of_databases
+        + (iteration_number - 1) * number_of_databases
+        + database_index
+    )
+    return AKRIBISCH_COLORS[bar_index % len(AKRIBISCH_COLORS)]
+
+
 def draw(
     ax,
     datasets,
@@ -324,6 +370,7 @@ def draw(
     mode,
     competitor,
     groups,
+    color_mode,
 ):
     ax.clear()
 
@@ -415,6 +462,13 @@ def draw(
                     x,
                     0 if math.isnan(value_result) else value_result,
                     width=bar_width * 0.9,
+                    color=bar_color(
+                        color_mode,
+                        dataset_index,
+                        iteration_number,
+                        database_index,
+                        number_of_databases,
+                    ),
                     label=(
                         DB_LABELS[database]
                         if dataset_index == 0
@@ -542,6 +596,7 @@ class App:
         files=(),
         mode="anonym",
         competitor="",
+        color_mode="",
         groups=True,
     ):
         self.root = root
@@ -580,6 +635,10 @@ class App:
 
         self.groups = tk.BooleanVar(
             value=groups
+        )
+
+        self.color_mode = tk.StringVar(
+            value=color_mode
         )
 
         frame = ttk.Frame(
@@ -678,6 +737,26 @@ class App:
         ).grid(
             row=1,
             column=1,
+        )
+
+        ttk.Label(
+            frame,
+            text="Farbmodus:",
+        ).grid(
+            row=1,
+            column=6,
+            padx=(18, 3),
+        )
+
+        ttk.Combobox(
+            frame,
+            textvariable=self.color_mode,
+            values=COLOR_MODES,
+            state="readonly",
+            width=14,
+        ).grid(
+            row=1,
+            column=7,
         )
 
         ttk.Label(
@@ -801,6 +880,7 @@ class App:
             self.mode,
             self.comp,
             self.groups,
+            self.color_mode,
         ]
 
         for variable in variables:
@@ -881,6 +961,7 @@ class App:
             self.mode.get(),
             self.comp.get(),
             self.groups.get(),
+            self.color_mode.get(),
         )
 
         self.canvas.draw_idle()
@@ -972,6 +1053,17 @@ def main():
             16,
         ],
         default=1,
+    )
+
+    parser.add_argument(
+        "--color-mode",
+        choices=COLOR_MODES,
+        default="2farbig",
+        help=(
+            "akribisch = jeder Balken eigene Farbe; "
+            "2farbig = SQLite blau/LiteDB orange; "
+            "blockfarbig = jedes Dataset eigenes Farbpaar"
+        ),
     )
 
     parser.add_argument(
