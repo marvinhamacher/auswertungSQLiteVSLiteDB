@@ -413,7 +413,7 @@ def draw(
             matplotlib_label(label(dataset, mode, index))
             for index, dataset in enumerate(datasets)
         ],
-        rotation=18,
+        rotation=90,
         ha="right",
     )
 
