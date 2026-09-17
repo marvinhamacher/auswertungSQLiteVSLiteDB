@@ -308,7 +308,7 @@ def hardware_label(dataset):
     )
 
     if not math.isnan(ram_size):
-        text += f" · {ram_size:.1f} GB"
+        text += f"\n · {ram_size:.1f} GB"
     if not math.isnan(ram_freq) and ram_freq > 0:
         text += f" DDR5-{int(ram_freq)}" if ram_freq >= 4800 else f" · {int(ram_freq)} MHz RAM"
 
